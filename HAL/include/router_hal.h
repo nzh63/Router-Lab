@@ -37,7 +37,10 @@ enum HAL_ERROR_NUMBER {
  * @return int 0 表示成功，非 0 表示失败
  */
 int HAL_Init(int debug, const in_addr_t if_addrs[N_IFACE_ON_BOARD]);
+// 在 xilinx 后端中不适用
+#ifndef ROUTER_BACKEND_XILINX
 int HAL_Init(int debug, const in_addr_t if_addrs[N_IFACE_ON_BOARD], const char **interfaces);
+#endif
 
 /**
  * @brief 获取从启动到当前时刻的毫秒数
