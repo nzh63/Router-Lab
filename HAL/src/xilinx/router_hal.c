@@ -92,8 +92,10 @@ void WaitTxBdAvailable() {
     }
   }
 }
-
-int HAL_Init(int debug, in_addr_t if_addrs[N_IFACE_ON_BOARD]) {
+int HAL_Init(int debug, const in_addr_t if_addrs[N_IFACE_ON_BOARD], const char **interfaces) {
+  return HAL_Init(debug, if_addrs);
+}
+int HAL_Init(int debug, const in_addr_t if_addrs[N_IFACE_ON_BOARD]) {
   XAxiDma_Bd *bd;
   if (inited) {
     return 0;

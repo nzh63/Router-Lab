@@ -27,10 +27,6 @@ enum HAL_ERROR_NUMBER {
   HAL_ERR_UNKNOWN,
 };
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
 /**
  * @brief 初始化，在所有其他函数调用前调用且仅调用一次
  *
@@ -40,7 +36,8 @@ extern "C" {
  *
  * @return int 0 表示成功，非 0 表示失败
  */
-int HAL_Init(int debug, in_addr_t if_addrs[N_IFACE_ON_BOARD]);
+int HAL_Init(int debug, const in_addr_t if_addrs[N_IFACE_ON_BOARD]);
+int HAL_Init(int debug, const in_addr_t if_addrs[N_IFACE_ON_BOARD], const char **interfaces);
 
 /**
  * @brief 获取从启动到当前时刻的毫秒数
@@ -104,8 +101,5 @@ int HAL_ReceiveIPPacket(int if_index_mask, uint8_t *buffer, size_t length,
 int HAL_SendIPPacket(int if_index, uint8_t *buffer, size_t length,
                      macaddr_t dst_mac);
 
-#ifdef __cplusplus
-}
-#endif
 
 #endif

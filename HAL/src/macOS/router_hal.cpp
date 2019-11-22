@@ -20,7 +20,7 @@
 
 const int IP_OFFSET = 14;
 
-const char *interfaces[N_IFACE_ON_BOARD] = {
+const char *default_interfaces[N_IFACE_ON_BOARD] = {
     "en0",
     "en1",
     "en2",
@@ -43,8 +43,10 @@ struct macaddr_wrap {
 std::map<std::pair<in_addr_t, int>, macaddr_wrap> arp_table;
 std::map<std::pair<in_addr_t, int>, uint64_t> arp_timer;
 
-extern "C" {
-int HAL_Init(int debug, in_addr_t if_addrs[N_IFACE_ON_BOARD]) {
+int HAL_Init(int debug, const in_addr_t if_addrs[N_IFACE_ON_BOARD]) {
+  return HAL_Init(debug, const if_addrs, default_interfaces);
+}
+int HAL_Init(int debug, in_addr_t if_addrs[N_IFACE_ON_BOARD], const char **interfaces) {
   if (inited) {
     return 0;
   }
@@ -389,5 +391,4 @@ int HAL_SendIPPacket(int if_index, uint8_t *buffer, size_t length,
     free(eth_buffer);
     return HAL_ERR_UNKNOWN;
   }
-}
 }
