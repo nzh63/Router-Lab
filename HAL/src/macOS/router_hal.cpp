@@ -352,7 +352,7 @@ int HAL_ReceiveIPPacket(int if_index_mask, uint8_t *buffer, size_t length,
                   inet_ntoa(addr));
         }
       }
-      continue;
+      return 0;
     }
 
     current_port = (current_port + 1) % N_IFACE_ON_BOARD;

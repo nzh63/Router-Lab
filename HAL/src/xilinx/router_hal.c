@@ -401,6 +401,7 @@ int HAL_ReceiveIPPacket(int if_index_mask, uint8_t *buffer, size_t length,
                        ip >> 24);
           }
         }
+        return 0;
       } else {
         if (debugEnabled) {
           xil_printf("HAL_ReceiveIPPacket: ignore unrecognized packet\r\n");
