@@ -2,6 +2,7 @@
 #include "router_hal_common.h"
 #include <stdio.h>
 
+#include <chrono>
 #include <ifaddrs.h>
 #include <linux/if_packet.h>
 #include <map>
@@ -21,6 +22,10 @@
 #else
 #include "platform/testing.h"
 #endif
+
+namespace {
+const auto& now = std::chrono::steady_clock::now;
+}  // namespace
 
 const int IP_OFFSET = 14;
 
@@ -205,7 +210,7 @@ int HAL_ReceiveIPPacket(int if_index_mask, uint8_t *buffer, size_t length,
     return HAL_ERR_CALLED_BEFORE_INIT;
   }
   if ((if_index_mask & ((1 << N_IFACE_ON_BOARD) - 1)) == 0 ||
-      (timeout < 0 && timeout != -1) || (if_index == NULL) || (buffer == NULL)) {
+      (if_index == NULL) || (buffer == NULL)) {
     return HAL_ERR_INVALID_PARAMETER;
   }
 
@@ -213,6 +218,7 @@ int HAL_ReceiveIPPacket(int if_index_mask, uint8_t *buffer, size_t length,
   for (int i = 0; i < N_IFACE_ON_BOARD; i++) {
     if (pcap_in_handles[i] && (if_index_mask & (1 << i))) {
       flag = true;
+      break;
     }
   }
   if (!flag) {
@@ -223,8 +229,7 @@ int HAL_ReceiveIPPacket(int if_index_mask, uint8_t *buffer, size_t length,
     return HAL_ERR_IFACE_NOT_EXIST;
   }
 
-  int64_t begin = HAL_GetTicks();
-  int64_t current_time = 0;
+  auto end = now() + std::chrono::microseconds(timeout);
   // Round robin
   int current_port = 0;
   struct pcap_pkthdr hdr;
@@ -311,8 +316,8 @@ int HAL_ReceiveIPPacket(int if_index_mask, uint8_t *buffer, size_t length,
     }
 
     current_port = (current_port + 1) % N_IFACE_ON_BOARD;
-    // -1 for infinity
-  } while ((current_time = HAL_GetTicks()) < begin + timeout || timeout == -1);
+    // <0 for infinity
+  } while (timeout < 0 || now() < end);
   return 0;
 }
 
