@@ -4,11 +4,13 @@
 
 #include <chrono>
 #include <ifaddrs.h>
+#include <iomanip>
 #include <linux/if_packet.h>
 #include <map>
 #include <net/if.h>
 #include <net/if_arp.h>
 #include <pcap.h>
+#include <sstream>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/ioctl.h>
@@ -87,6 +89,15 @@ int HAL_Init(int debug, const in_addr_t if_addrs[N_IFACE_ON_BOARD], const char *
         pcap_open_live(interfaces[i], BUFSIZ, 1, 1, error_buffer);
     if (pcap_in_handles[i]) {
       pcap_setnonblock(pcap_in_handles[i], 1, error_buffer);
+      struct bpf_program pgm;
+      std::stringstream filter;
+      filter << "not ether src ";
+      for (int j = 0; j < 6; j++) {
+        filter << std::hex << std::setw(2) << std::setfill('0') << (int)interface_mac[i][j];
+        if (j != 5) filter << ':';
+      }
+      pcap_compile(pcap_in_handles[i], &pgm, filter.str().c_str(), 1, PCAP_NETMASK_UNKNOWN);
+      pcap_setfilter(pcap_in_handles[i], &pgm);
       if (debugEnabled) {
         fprintf(stderr, "HAL_Init: pcap capture enabled for %s\n",
                 interfaces[i]);
@@ -241,12 +252,7 @@ int HAL_ReceiveIPPacket(int if_index_mask, uint8_t *buffer, size_t length,
     }
 
     const uint8_t *packet = pcap_next(pcap_in_handles[current_port], &hdr);
-    if (packet && hdr.caplen >= IP_OFFSET &&
-        memcmp(&packet[6], interface_mac[current_port], sizeof(macaddr_t)) ==
-            0) {
-      // skip outbound
-      continue;
-    } else if (packet && hdr.caplen >= IP_OFFSET && packet[12] == 0x08 &&
+    if (packet && hdr.caplen >= IP_OFFSET && packet[12] == 0x08 &&
                packet[13] == 0x00) {
       // IPv4
       // TODO: what if len != caplen
