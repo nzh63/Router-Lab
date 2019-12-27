@@ -240,88 +240,95 @@ int HAL_ReceiveIPPacket(int if_index_mask, uint8_t *buffer, size_t length,
     return HAL_ERR_IFACE_NOT_EXIST;
   }
 
-  auto end = now() + std::chrono::microseconds(timeout);
+  decltype(now()) end;
+  bool has_set_time = false;
   // Round robin
   int current_port = 0;
   struct pcap_pkthdr hdr;
   do {
-    if ((if_index_mask & (1 << current_port)) == 0 ||
-        !pcap_in_handles[current_port]) {
-      current_port = (current_port + 1) % N_IFACE_ON_BOARD;
-      continue;
-    }
-
-    const uint8_t *packet = pcap_next(pcap_in_handles[current_port], &hdr);
-    if (packet && hdr.caplen >= IP_OFFSET && packet[12] == 0x08 &&
-               packet[13] == 0x00) {
-      // IPv4
-      // TODO: what if len != caplen
-      // Beware: might be larger than MTU because of offloading
-      size_t ip_len = hdr.caplen - IP_OFFSET;
-      size_t real_length = length > ip_len ? ip_len : length;
-      memcpy(buffer, &packet[IP_OFFSET], real_length);
-      memcpy(dst_mac, &packet[0], sizeof(macaddr_t));
-      memcpy(src_mac, &packet[6], sizeof(macaddr_t));
-      *if_index = current_port;
-      return ip_len;
-    } else if (packet && hdr.caplen >= IP_OFFSET && packet[12] == 0x08 &&
-               packet[13] == 0x06) {
-      // ARP
-      // learn it
-      macaddr_t mac;
-      memcpy(mac, &packet[22], sizeof(macaddr_t));
-      in_addr_t ip;
-      memcpy(&ip, &packet[28], sizeof(in_addr_t));
-      memcpy(arp_table[std::pair<in_addr_t, int>(ip, current_port)], mac,
-             sizeof(macaddr_t));
-      if (debugEnabled) {
-        fprintf(stderr, "HAL_ReceiveIPPacket: learned MAC address of %s\n",
-                inet_ntoa(in_addr{ip}));
+    for (int _i = 0; _i < 8; _i++) {
+      if ((if_index_mask & (1 << current_port)) == 0 ||
+          !pcap_in_handles[current_port]) {
+        current_port = (current_port + 1) % N_IFACE_ON_BOARD;
+        continue;
       }
 
-      in_addr_t dst_ip;
-      memcpy(&dst_ip, &packet[38], sizeof(in_addr_t));
-      // ask me: reply
-      if (dst_ip == interface_addrs[current_port] && packet[21] == 0x01) {
-        // reply
-        uint8_t buffer[64] = {0};
-        // dst mac
-        memcpy(buffer, &packet[6], sizeof(macaddr_t));
-        // src mac
-        macaddr_t mac;
-        HAL_GetInterfaceMacAddress(current_port, mac);
-        memcpy(&buffer[6], mac, sizeof(macaddr_t));
+      const uint8_t *packet = pcap_next(pcap_in_handles[current_port], &hdr);
+      if (packet && hdr.caplen >= IP_OFFSET && packet[12] == 0x08 &&
+                packet[13] == 0x00) {
+        // IPv4
+        // TODO: what if len != caplen
+        // Beware: might be larger than MTU because of offloading
+        size_t ip_len = hdr.caplen - IP_OFFSET;
+        size_t real_length = length > ip_len ? ip_len : length;
+        memcpy(buffer, &packet[IP_OFFSET], real_length);
+        memcpy(dst_mac, &packet[0], sizeof(macaddr_t));
+        memcpy(src_mac, &packet[6], sizeof(macaddr_t));
+        *if_index = current_port;
+        return ip_len;
+      } else if (packet && hdr.caplen >= IP_OFFSET && packet[12] == 0x08 &&
+                packet[13] == 0x06) {
         // ARP
-        buffer[12] = 0x08;
-        buffer[13] = 0x06;
-        // hardware type
-        buffer[15] = 0x01;
-        // protocol type
-        buffer[16] = 0x08;
-        // hardware size
-        buffer[18] = 0x06;
-        // protocol size
-        buffer[19] = 0x04;
-        // opcode
-        buffer[21] = 0x02;
-        // sender
-        memcpy(&buffer[22], mac, sizeof(macaddr_t));
-        memcpy(&buffer[28], &dst_ip, sizeof(in_addr_t));
-        // target
-        memcpy(&buffer[32], &packet[22], sizeof(macaddr_t));
-        memcpy(&buffer[38], &packet[28], sizeof(in_addr_t));
-
-        pcap_inject(pcap_out_handles[current_port], buffer, sizeof(buffer));
+        // learn it
+        macaddr_t mac;
+        memcpy(mac, &packet[22], sizeof(macaddr_t));
+        in_addr_t ip;
+        memcpy(&ip, &packet[28], sizeof(in_addr_t));
+        memcpy(arp_table[std::pair<in_addr_t, int>(ip, current_port)], mac,
+              sizeof(macaddr_t));
         if (debugEnabled) {
-          fprintf(stderr, "HAL_ReceiveIPPacket: replied ARP to %s\n",
+          fprintf(stderr, "HAL_ReceiveIPPacket: learned MAC address of %s\n",
                   inet_ntoa(in_addr{ip}));
         }
-      }
-      // otherwise: learn and ignore
-      return 0;
-    }
 
-    current_port = (current_port + 1) % N_IFACE_ON_BOARD;
+        in_addr_t dst_ip;
+        memcpy(&dst_ip, &packet[38], sizeof(in_addr_t));
+        // ask me: reply
+        if (dst_ip == interface_addrs[current_port] && packet[21] == 0x01) {
+          // reply
+          uint8_t buffer[64] = {0};
+          // dst mac
+          memcpy(buffer, &packet[6], sizeof(macaddr_t));
+          // src mac
+          macaddr_t mac;
+          HAL_GetInterfaceMacAddress(current_port, mac);
+          memcpy(&buffer[6], mac, sizeof(macaddr_t));
+          // ARP
+          buffer[12] = 0x08;
+          buffer[13] = 0x06;
+          // hardware type
+          buffer[15] = 0x01;
+          // protocol type
+          buffer[16] = 0x08;
+          // hardware size
+          buffer[18] = 0x06;
+          // protocol size
+          buffer[19] = 0x04;
+          // opcode
+          buffer[21] = 0x02;
+          // sender
+          memcpy(&buffer[22], mac, sizeof(macaddr_t));
+          memcpy(&buffer[28], &dst_ip, sizeof(in_addr_t));
+          // target
+          memcpy(&buffer[32], &packet[22], sizeof(macaddr_t));
+          memcpy(&buffer[38], &packet[28], sizeof(in_addr_t));
+
+          pcap_inject(pcap_out_handles[current_port], buffer, sizeof(buffer));
+          if (debugEnabled) {
+            fprintf(stderr, "HAL_ReceiveIPPacket: replied ARP to %s\n",
+                    inet_ntoa(in_addr{ip}));
+          }
+        }
+        // otherwise: learn and ignore
+        return 0;
+      }
+
+      current_port = (current_port + 1) % N_IFACE_ON_BOARD;
+    }
+    if (!has_set_time) {
+      end = now() + std::chrono::microseconds(timeout);
+      has_set_time = true;
+    }
     // <0 for infinity
   } while (timeout < 0 || now() < end);
   return 0;
